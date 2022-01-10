@@ -97,10 +97,6 @@ github.com/pmezard/go-difflib/difflib
 ## explicit
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
-# github.com/tcolgate/mp3 v0.0.0-20170426193717-e79c5a46d300
-## explicit
-github.com/tcolgate/mp3
-github.com/tcolgate/mp3/internal/data
 # go.etcd.io/bbolt v1.3.5
 ## explicit
 go.etcd.io/bbolt
@@ -115,7 +111,7 @@ golang.org/x/sys/unix
 # golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 ## explicit
 golang.org/x/time/rate
-# gopkg.in/tucnak/telebot.v2 v2.0.0-20200329125927-3458aeb2e7be
+# gopkg.in/tucnak/telebot.v2 v2.5.0
 ## explicit
 gopkg.in/tucnak/telebot.v2
 # gopkg.in/yaml.v2 v2.2.8

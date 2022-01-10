@@ -67,13 +67,15 @@ func main() {
 		log.Fatalf("[ERROR] can't open db %s, %v", opts.DB, err)
 	}
 
-	telegramNotif, err := proc.NewTelegramClient(opts.TelegramToken, opts.TelegramServer, opts.TelegramTimeout)
+	telegramBot, err := proc.NewTelegramV2Client(opts.TelegramToken, opts.TelegramServer, opts.TelegramTimeout)
 	if err != nil {
 		log.Fatalf("[ERROR] failed to initialize telegram client %s, %v", opts.TelegramToken, err)
 	}
 
-	p := &proc.Processor{Conf: conf, Store: db, TelegramNotif: telegramNotif, TwitterNotif: makeTwitter(opts)}
-	go p.Do()
+	telegramBot.Start()
+
+	// p := &proc.Processor{Conf: conf, Store: db, TelegramNotif: telegramNotif, TwitterNotif: makeTwitter(opts)}
+	// go p.Do()
 
 	server := api.Server{
 		Version: revision,
