@@ -18,17 +18,11 @@ type TelegramNotif interface {
 	Send(chanID string, item feed.Item) error
 }
 
-// TwitterNotif is interface to send message to twitter
-type TwitterNotif interface {
-	Send(item feed.Item) error
-}
-
 // Processor is a feed reader and store writer
 type Processor struct {
 	Conf          *Conf
 	Store         *BoltDB
 	TelegramNotif TelegramNotif
-	TwitterNotif  TwitterNotif
 }
 
 // Conf for feeds config yml
@@ -46,14 +40,13 @@ type Conf struct {
 
 // Feed defines config section for a feed~
 type Feed struct {
-	Title           string `yaml:"title"`
-	Description     string `yaml:"description"`
-	Link            string `yaml:"link"`
-	Image           string `yaml:"image"`
-	Language        string `yaml:"language"`
-	TelegramChannel string `yaml:"telegram_channel"`
-	Filter          Filter `yaml:"filter"`
-	Sources         []struct {
+	Title       string `yaml:"title"`
+	Description string `yaml:"description"`
+	Link        string `yaml:"link"`
+	Image       string `yaml:"image"`
+	Language    string `yaml:"language"`
+	Filter      Filter `yaml:"filter"`
+	Sources     []struct {
 		Name string `yaml:"name"`
 		URL  string `yaml:"url"`
 	} `yaml:"sources"`
@@ -76,7 +69,7 @@ func (p *Processor) Do() {
 			for _, src := range fm.Sources {
 				name, src, fm := name, src, fm
 				swg.Go(func(context.Context) {
-					p.feed(name, src.URL, fm.TelegramChannel, p.Conf.System.MaxItems, fm.Filter)
+					p.feed(name, src.URL, p.Conf.System.MaxItems, fm.Filter)
 				})
 			}
 			// keep up to MaxKeepInDB items in bucket
@@ -94,7 +87,7 @@ func (p *Processor) Do() {
 	}
 }
 
-func (p *Processor) feed(name, url, telegramChannel string, max int, filter Filter) {
+func (p *Processor) feed(name, url string, max int, filter Filter) {
 	rss, err := feed.Parse(url)
 	if err != nil {
 		log.Printf("[WARN] failed to parse %s, %v", url, err)
@@ -131,13 +124,9 @@ func (p *Processor) feed(name, url, telegramChannel string, max int, filter Filt
 			return
 		}
 
-		if err := p.TelegramNotif.Send(telegramChannel, item); err != nil {
+		if err := p.TelegramNotif.Send("telegramChannel", item); err != nil {
 			log.Printf("[WARN] failed to send telegram message, url=%s to channel=%s, %v",
-				item.Enclosure.URL, telegramChannel, err)
-		}
-
-		if err := p.TwitterNotif.Send(item); err != nil {
-			log.Printf("[WARN] failed send twitter message, url=%s, %v", item.Enclosure.URL, err)
+				item.Enclosure.URL, "telegramChannel", err)
 		}
 	}
 }

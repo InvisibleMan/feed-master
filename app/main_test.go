@@ -80,32 +80,15 @@ func TestSingleFeedConf(t *testing.T) {
 		i := i
 		tc := tc
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			conf := singleFeedConf(tc.feedURL, tc.channel, tc.updateInterval)
+			conf := singleFeedConf(tc.feedURL, tc.updateInterval)
 
 			assert.Len(t, conf.Feeds, 1)
 			assert.Equal(t, conf.System.UpdateInterval, tc.updateInterval)
 
 			feed := conf.Feeds["auto"]
-			assert.Equal(t, feed.TelegramChannel, tc.channel)
 			assert.Len(t, feed.Sources, 1)
 			assert.Equal(t, feed.Sources[0].Name, "auto")
 			assert.Equal(t, feed.Sources[0].URL, tc.feedURL)
 		})
 	}
-}
-
-func TestMakeTwitter(t *testing.T) {
-	opts := options{
-		TwitterConsumerKey:    "a",
-		TwitterConsumerSecret: "b",
-		TwitterAccessToken:    "c",
-		TwitterAccessSecret:   "d",
-	}
-
-	client := makeTwitter(opts)
-
-	assert.Equal(t, client.ConsumerKey, "a")
-	assert.Equal(t, client.ConsumerSecret, "b")
-	assert.Equal(t, client.AccessToken, "c")
-	assert.Equal(t, client.AccessSecret, "d")
 }
