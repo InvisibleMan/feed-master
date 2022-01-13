@@ -2,24 +2,21 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"time"
 
 	log "github.com/go-pkgz/lgr"
 	"github.com/jessevdk/go-flags"
-	"gopkg.in/yaml.v2"
 
 	"github.com/umputun/feed-master/app/api"
 	"github.com/umputun/feed-master/app/proc"
+	"github.com/umputun/feed-master/app/store"
 )
 
 type options struct {
 	DB   string `short:"c" long:"db" env:"FM_DB" default:"var/feed-master.bdb" description:"bolt db file"`
 	Conf string `short:"f" long:"conf" env:"FM_CONF" default:"feed-master.yml" description:"config file (yml)"`
 
-	// single feed overrides
-	Feed           string        `long:"feed" env:"FM_FEED" description:"single feed, overrides config"`
 	UpdateInterval time.Duration `long:"update-interval" env:"UPDATE_INTERVAL" default:"1m" description:"update interval, overrides config"`
 
 	TelegramServer  string        `long:"telegram_server" env:"TELEGRAM_SERVER" default:"https://api.telegram.org" description:"telegram bot api server"`
@@ -39,20 +36,12 @@ func main() {
 	}
 	setupLog(opts.Dbg)
 
-	var conf = &proc.Conf{}
-	if opts.Feed != "" { // single feed (no config) mode
-		conf = singleFeedConf(opts.Feed, opts.UpdateInterval)
-	}
-
 	var err error
-	if opts.Feed == "" {
-		conf, err = loadConfig(opts.Conf)
-		if err != nil {
-			log.Fatalf("[ERROR] can't load config %s, %v", opts.Conf, err)
-		}
-	}
+	var conf = &proc.Conf{}
 
-	db, err := proc.NewBoltDB(opts.DB)
+	conf.System.UpdateInterval = opts.UpdateInterval
+
+	db, err := store.NewBoldStore(opts.DB)
 	if err != nil {
 		log.Fatalf("[ERROR] can't open db %s, %v", opts.DB, err)
 	}
@@ -64,44 +53,14 @@ func main() {
 
 	telegramBot.Start()
 
-	// p := &proc.Processor{Conf: conf, Store: db, TelegramNotif: telegramNotif}
-	// go p.Do()
+	p := &proc.Processor{Conf: conf, TelegramBot: telegramBot}
+	go p.Do(db)
 
 	server := api.Server{
 		Version: revision,
 		Conf:    *conf,
-		Store:   db,
 	}
 	server.Run(8080)
-}
-
-func singleFeedConf(feedURL string, updateInterval time.Duration) *proc.Conf {
-	conf := proc.Conf{}
-	f := proc.Feed{
-		Sources: []struct {
-			Name string `yaml:"name"`
-			URL  string `yaml:"url"`
-		}{
-			{Name: "auto", URL: feedURL},
-		},
-	}
-	conf.Feeds = map[string]proc.Feed{"auto": f}
-	conf.System.UpdateInterval = updateInterval
-	return &conf
-}
-
-func loadConfig(fname string) (res *proc.Conf, err error) {
-	res = &proc.Conf{}
-	data, err := ioutil.ReadFile(fname) // nolint
-	if err != nil {
-		return nil, err
-	}
-
-	if err := yaml.Unmarshal(data, res); err != nil {
-		return nil, err
-	}
-
-	return res, nil
 }
 
 func setupLog(dbg bool) {

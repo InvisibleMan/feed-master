@@ -11,6 +11,7 @@ import (
 	"github.com/go-pkgz/syncs"
 
 	"github.com/umputun/feed-master/app/feed"
+	"github.com/umputun/feed-master/app/models"
 )
 
 // TelegramNotif is interface to send messages to telegram
@@ -20,9 +21,9 @@ type TelegramNotif interface {
 
 // Processor is a feed reader and store writer
 type Processor struct {
-	Conf          *Conf
-	Store         *BoltDB
-	TelegramNotif TelegramNotif
+	Conf        *Conf
+	Store       *BoltDB
+	TelegramBot *TelegramClientV2
 }
 
 // Conf for feeds config yml
@@ -58,39 +59,49 @@ type Filter struct {
 	Title string `yaml:"title"`
 }
 
+type FeedsStore interface {
+	Iterate(func(feed models.Feed) error) error
+}
+
 // Do activates loop of goroutine for each feed, concurrency limited by p.Conf.Concurrent
-func (p *Processor) Do() {
-	log.Printf("[INFO] activate processor, feeds=%d, %+v", len(p.Conf.Feeds), p.Conf)
+func (p *Processor) Do(feedIterator FeedsStore) {
+	log.Printf("[INFO] activate processor")
 	p.setDefaults()
 
 	for {
 		swg := syncs.NewSizedGroup(p.Conf.System.Concurrent, syncs.Preemptive)
-		for name, fm := range p.Conf.Feeds {
-			for _, src := range fm.Sources {
-				name, src, fm := name, src, fm
-				swg.Go(func(context.Context) {
-					p.feed(name, src.URL, p.Conf.System.MaxItems, fm.Filter)
-				})
-			}
-			// keep up to MaxKeepInDB items in bucket
-			if removed, err := p.Store.removeOld(name, p.Conf.System.MaxKeepInDB); err == nil {
-				if removed > 0 {
-					log.Printf("[DEBUG] removed %d from %s", removed, name)
-				}
-			} else {
-				log.Printf("[WARN] failed to remove, %v", err)
-			}
-		}
+		feedIterator.Iterate(func(f models.Feed) error {
+			swg.Go(func(context.Context) {
+				log.Printf("[INFO] fetch feed: '%s'", f.URL)
+
+				// p.feed(f, p.Conf.System.MaxItems)
+			})
+
+			return nil
+		})
+
+		// for name, fm := range p.Conf.Feeds {
+		// 	// keep up to MaxKeepInDB items in bucket
+		// 	if removed, err := p.Store.removeOld(name, p.Conf.System.MaxKeepInDB); err == nil {
+		// 		if removed > 0 {
+		// 			log.Printf("[DEBUG] removed %d from %s", removed, name)
+		// 		}
+		// 	} else {
+		// 		log.Printf("[WARN] failed to remove, %v", err)
+		// 	}
+		// }
+
 		swg.Wait()
-		log.Printf("[DEBUG] refresh completed")
+		log.Printf("[DEBUG] refresh completed. Next iteration after: '%v'", p.Conf.System.UpdateInterval)
+
 		time.Sleep(p.Conf.System.UpdateInterval)
 	}
 }
 
-func (p *Processor) feed(name, url string, max int, filter Filter) {
-	rss, err := feed.Parse(url)
+func (p *Processor) feed(f Feed, max int) {
+	rss, err := feed.Parse(f.Link)
 	if err != nil {
-		log.Printf("[WARN] failed to parse %s, %v", url, err)
+		log.Printf("[WARN] failed to parse %s, %v", f.Link, err)
 		return
 	}
 
@@ -106,15 +117,7 @@ func (p *Processor) feed(name, url string, max int, filter Filter) {
 			continue
 		}
 
-		skip, err := filter.skip(item)
-		if err != nil {
-			log.Printf("[WARN] failed to filter %s (%s) to %s, save as is, %v", item.GUID, item.PubDate, name, err)
-		}
-		if skip {
-			item.Junk = true
-			log.Printf("[INFO] filtered %s (%s), %s %s", item.GUID, item.PubDate, name, item.Title)
-		}
-
+		name := f.Title
 		created, err := p.Store.Save(name, item)
 		if err != nil {
 			log.Printf("[WARN] failed to save %s (%s) to %s, %v", item.GUID, item.PubDate, name, err)
@@ -124,10 +127,10 @@ func (p *Processor) feed(name, url string, max int, filter Filter) {
 			return
 		}
 
-		if err := p.TelegramNotif.Send("telegramChannel", item); err != nil {
-			log.Printf("[WARN] failed to send telegram message, url=%s to channel=%s, %v",
-				item.Enclosure.URL, "telegramChannel", err)
-		}
+		// if err := p.TelegramNotif.Send("telegramChannel", item); err != nil {
+		// 	log.Printf("[WARN] failed to send telegram message, url=%s to channel=%s, %v",
+		// 		item.Enclosure.URL, "telegramChannel", err)
+		// }
 	}
 }
 

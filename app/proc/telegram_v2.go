@@ -57,6 +57,15 @@ func (client TelegramClientV2) sendText(channelID string, item feed.Item) (*tb.M
 	return message, err
 }
 
+func (client TelegramClientV2) sendTextOnly(channelID string, text string) (*tb.Message, error) {
+	message, err := client.Bot.Send(
+		recipient{chatID: channelID},
+		text,
+	)
+
+	return message, err
+}
+
 // https://core.telegram.org/bots/api#html-style
 func (client TelegramClientV2) tagLinkOnlySupport(htmlText string) string {
 	p := bluemonday.NewPolicy()
@@ -99,10 +108,6 @@ type recipient struct {
 }
 
 func (r recipient) Recipient() string {
-	if !strings.HasPrefix(r.chatID, "@") {
-		return "@" + r.chatID
-	}
-
 	return r.chatID
 }
 
@@ -127,24 +132,11 @@ Use commands:
 )
 
 func (client TelegramClientV2) Start() {
-
-	var (
-		menu      = &tb.ReplyMarkup{ResizeReplyKeyboard: true}
-		btnImport = menu.Text(commandImport)
-		btnExport = menu.Text(commandExport)
-		btnStop   = menu.Text(commandStop)
-		btnHelp   = menu.Text(commandHelp)
-	)
-
-	menu.Reply(
-		menu.Row(btnHelp),
-		menu.Row(btnImport),
-		menu.Row(btnExport),
-		menu.Row(btnStop),
-	)
+	// Set commands via BotFather
+	// or see proposal https://github.com/tucnak/telebot/issues/261
 
 	client.Bot.Handle("/hello", func(m *tb.Message) {
-		client.Bot.Send(m.Sender, "Hello World!", menu)
+		client.Bot.Send(m.Sender, "Hello World!")
 	})
 
 	// Command: /start
@@ -153,10 +145,10 @@ func (client TelegramClientV2) Start() {
 			// TODO: send "Bot works in private mode only"
 			return
 		}
+		client.Bot.Send(m.Sender, msgStart)
 
-		client.Bot.Send(m.Sender, msgStart, menu)
-
-		logCommand(commandStart, m.Chat.ID, m.Payload)
+		log.Printf("[DEBUG] telegram receive command: '%s'\nchatID: '%d'\nchat userName: '%s'\nuserID: '%d'\nuserName: '%s'", commandStart, m.Chat.ID, m.Chat.Username, m.Sender.ID, m.Sender.Username)
+		// logCommand(commandStart, m.Chat.ID, m.Payload)
 	})
 
 	// Command: /help
@@ -165,7 +157,7 @@ func (client TelegramClientV2) Start() {
 			return
 		}
 
-		client.Bot.Send(m.Sender, msgHelp, menu)
+		client.Bot.Send(m.Sender, msgHelp)
 
 		logCommand(commandHelp, m.Chat.ID, m.Payload)
 	})
@@ -185,7 +177,7 @@ func (client TelegramClientV2) Start() {
 			return
 		}
 
-		// client.Bot.Send(m.Sender, "")
+		client.Bot.Send(m.Sender, "Upload OPML-file, please")
 		logCommand(commandImport, m.Chat.ID, m.Payload)
 	})
 
@@ -207,9 +199,25 @@ func (client TelegramClientV2) Start() {
 	})
 
 	log.Print("[INFO] telegram bot started")
-	client.Bot.Start()
+	go client.Bot.Start()
 }
 
 func logCommand(command string, chatID int64, payload string) {
 	log.Printf("[DEBUG] telegram receive command: '%s' in chat: '%d'\n%s", command, chatID, payload)
+}
+
+// Send message, skip if telegram token empty
+func (client TelegramClientV2) Send(channelID string, item feed.Item) (err error) {
+	if client.Bot == nil || channelID == "" {
+		return nil
+	}
+
+	message, err := client.sendText(channelID, item)
+
+	if err != nil {
+		return errors.Wrapf(err, "can't send to telegram for %+v", item.Enclosure)
+	}
+
+	log.Printf("[DEBUG] telegram message sent: \n%s", message.Text)
+	return nil
 }
